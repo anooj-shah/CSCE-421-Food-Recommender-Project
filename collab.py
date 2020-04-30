@@ -7,38 +7,33 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.sparse import csr_matrix
 
 recipes = pd.read_csv('data/core-data-train_rating.csv')
-recipes = recipes[['user_id', 'recipe_id', 'rating',]]
+recipes = recipes[['user_id', 'recipe_id', 'rating']]
 recipes.dropna(inplace = True) # drop any NaN if any
+recipes = recipes[:50000]
 
-print("begin")
-# recipes_rating = (recipes.
-#     groupby(by = ['title'])['rating'].
-#     count().
-#     reset_index())
+coreRecipes = pd.read_csv('data/core-data_recipe.csv')
+coreRecipes = coreRecipes[['recipe_id', 'recipe_name']]
+coreRecipes.dropna(inplace = True)
 
+combinedRecipes = pd.merge(recipes, coreRecipes, on = 'recipe_id')
 
-# for i in range(0, len(data.index)):
-#     split_data=re.split(r'[,]', data.iloc[i, 6])
-#     for k,l in enumerate(split_data):
-#         split_data[k]=(split_data[k].replace("['", ""))
-#         split_data[k]=(split_data[k].replace(" '", ""))
-#         split_data[k]=(split_data[k].replace("'", ""))
-#         split_data[k]=(split_data[k].replace("]", ""))
-#     split_data=','.join(split_data[:])
-#     data['categories'].iloc[i]=split_data
+combinedRecipes = combinedRecipes.drop_duplicates(['user_id', 'recipe_name'])
 
-# print(data.head(5))
+combinedRecipes = combinedRecipes.pivot(index = 'recipe_name', columns = 'user_id', values = 'rating').fillna(0)
 
-# get user input for what categories they want to filter by
-# categoryInput = input("Please enter categories (for multiple, enter | in between each category): ")
+recipeMatrix = csr_matrix(combinedRecipes.values)
 
-# reduce the amount of entries in the dataframe
-# data = data[data['categories'].str.contains(categoryInput)]
-recipes = recipes.drop_duplicates(['user_id', 'recipe_id'])
-print("dropped")
+# knn
+recipeRecomm = NearestNeighbors(metric = 'cosine', algorithm = 'brute')
+recipeRecomm.fit(recipeMatrix)
 
-recipes = recipes.pivot(index = 'recipe_id', columns = 'user_id', values = 'rating').fillna(0)
+# testing 
+randomChoice = np.random.choice(combinedRecipes.shape[0])
+print(combinedRecipes.shape[0])
+distances, indices = recipeRecomm.kneighbors(combinedRecipes.iloc[randomChoice].values.reshape(1, -1), n_neighbors = 11)
 
-print("end?")
-
-dataMatrix = csr_matrix(recipes.values)
+for i in range(0, len(distances.flatten())):
+    if i == 0:
+        print("Recommendations for Recipe: '{0}' on priority basis:\n".format(combinedRecipes.index[randomChoice]))
+    else:
+        print('{0}: {1}'.format(i, combinedRecipes.index[indices.flatten()[i]]))
